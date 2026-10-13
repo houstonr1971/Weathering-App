@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cemetery Gravestone Weathering Analysis</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-900 text-slate-100">
+
+    <!-- Navigation / Header -->
+    <header class="bg-slate-800/80 border-b border-slate-700 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="p-2.5 bg-indigo-600/30 border border-indigo-500/50 rounded-xl text-indigo-400">
+                    <i class="fa-solid fa-mountain-sun text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                        LithoWeather <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-medium border border-indigo-500/30">Cemetery Geology Tool</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">Gravestone Weathering Rank Analysis & Linear Regression ($y_0 = 1$)</p>
+                </div>
+            </div>
+
+            <!-- Action Header Buttons -->
+            <div class="flex items-center gap-2 flex-wrap text-sm">
+                <button id="btnLoadSample" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg shadow-sm transition-all flex items-center gap-2">
+                    <i class="fa-solid fa-database text-xs"></i> Load Cemetery Field Data
+                </button>
+                <button id="btnClearData" class="px-3.5 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium rounded-lg transition-all flex items-center gap-2">
+                    <i class="fa-solid fa-trash-can text-xs"></i> Clear
+                </button>
+                <button id="btnExportCSV" class="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-medium rounded-lg transition-all flex items-center gap-2">
+                    <i class="fa-solid fa-file-csv text-xs"></i> Export CSV
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Top Overview Stats & Controls -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-slate-800/60 border border-slate-700/80 rounded-xl p-4 flex items-center gap-4">
+                <div class="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-blue-400">
+                    <i class="fa-solid fa-monument text-xl"></i>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-white" id="statTotalStones">0</div>
+                    <div class="text-xs text-slate-400">Observed Gravestones</div>
+                </div>
+            </div>
+            <div class="bg-slate-800/60 border border-slate-700/80 rounded-xl p-4 flex items-center gap-4">
+                <div class="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-400">
+                    <i class="fa-solid fa-cubes text-xl"></i>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-white" id="statRockTypesCount">0</div>
+                    <div class="text-xs text-slate-400">Distinct Rock Types</div>
+                </div>
+            </div>
+            <div class="bg-slate-800/60 border border-slate-700/80 rounded-xl p-4 flex items-center gap-4">
+                <div class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-400">
+                    <i class="fa-solid fa-chart-line text-xl"></i>
+                </div>
+                <div>
+                    <div class="text-lg font-bold text-amber-300 font-mono" id="statOverallSlope">y = 1 + 0.0000x</div>
+                    <div class="text-xs text-slate-400">Overall Regression Slope ($m$)</div>
+                </div>
+            </div>
+            <div class="bg-slate-800/60 border border-slate-700/80 rounded-xl p-4 flex items-center gap-4">
+                <div class="p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg text-purple-400">
+                    <i class="fa-solid fa-hourglass-half text-xl"></i>
+                </div>
+                <div>
+                    <div class="text-lg font-bold text-purple-300 font-mono" id="statAvgRate">0.00 / century</div>
+                    <div class="text-xs text-slate-400">Avg Weathering Rate</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Grid Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- Left Panel: Form & Reference Guide (4 cols on lg) -->
+            <div class="lg:col-span-4 space-y-6">
+                
+                <!-- Data Input Card -->
+                <div class="bg-slate-800/80 border border-slate-700 rounded-xl p-5 shadow-lg">
+                    <h2 class="text-base font-semibold text-white mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-square-plus text-indigo-400"></i> Record New Observation
+                    </h2>
+
+                    <form id="observationForm" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-300 mb-1">Gravestone ID / Inscription</label>
+                            <input type="text" id="inputIdentifier" placeholder="e.g., Plot A-102 (Miller)" required 
+                                   class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-slate-300 mb-1">Rock Type</label>
+                            <select id="selectRockType" required 
+                                    class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                <option value="Marble">Marble (Circle 🟢)</option>
+                                <option value="Granite">Granite (Triangle 🔺)</option>
+                                <option value="Sandstone">Sandstone (Square 🟧)</option>
+                                <option value="Limestone">Limestone (Diamond 🔷)</option>
+                                <option value="Slate">Slate (Star ⭐)</option>
+                                <option value="Quartzite">Quartzite (Cross ✖)</option>
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-300 mb-1">Year Carved / Set</label>
+                                <input type="number" id="inputYear" placeholder="e.g. 1895" min="1600" max="2026" required
+                                       class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-300 mb-1">Exposure (Years)</label>
+                                <input type="number" id="inputExposure" placeholder="Auto-calc" min="0" step="0.5" required
+                                       class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="text-xs font-medium text-slate-300">
+                                    Weathering Rank (1 - 6)
+                                </label>
+                                <span id="rankBadge" class="text-xs font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                    1.0 - Unweathered
+                                </span>
+                            </div>
+                            <input type="range" id="inputRank" min="1" max="6" step="0.1" value="1.0" class="w-full accent-indigo-500 cursor-pointer bg-slate-900">
+                            <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+                                <span>1 (Pristine)</span>
+                                <span>3 (Moderate)</span>
+                                <span>6 (Illegible)</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-slate-300 mb-1">Field Notes / Observations</label>
+                            <textarea id="inputNotes" rows="2" placeholder="e.g. Lichen growth, sugaring, edge rounding..." 
+                                      class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"></textarea>
+                        </div>
+
+                        <button type="submit" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm rounded-lg shadow-md transition-all flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-plus"></i> Add Gravestone Data Point
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Weathering Scale Reference Guide -->
+                <div class="bg-slate-800/80 border border-slate-700 rounded-xl p-5 shadow-lg">
+                    <h3 class="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-book-open text-amber-400"></i> Weathering Ranking Reference (1-6)
+                    </h3>
+                    <div class="space-y-2 text-xs">
+                        <div class="p-2 rounded bg-slate-900/60 border border-emerald-500/30 flex gap-2">
+                            <span class="font-bold text-emerald-400 w-12 shrink-0">Rank 1:</span>
+                            <span class="text-slate-300">As new. Crisp sharp lettering, no lichen, zero mineral loss.</span>
+                        </div>
+                        <div class="p-2 rounded bg-slate-900/60 border border-teal-500/30 flex gap-2">
+                            <span class="font-bold text-teal-400 w-12 shrink-0">Rank 2:</span>
+                            <span class="text-slate-300">Slightly weathered. Minor loss of sharp polish, very light discolouration.</span>
+                        </div>
+                        <div class="p-2 rounded bg-slate-900/60 border border-yellow-500/30 flex gap-2">
+                            <span class="font-bold text-yellow-400 w-12 shrink-0">Rank 3:</span>
+                            <span class="text-slate-300">Moderate. Lettering slightly rounded, minor pitting, readable with care.</span>
+                        </div>
+                        <div class="p-2 rounded bg-slate-900/60 border border-orange-500/30 flex gap-2">
+                            <span class="font-bold text-orange-400 w-12 shrink-0">Rank 4:</span>
+                            <span class="text-slate-300">Badly weathered. Grain loosening ("sugaring"), parts of text obscured.</span>
+                        </div>
+                        <div class="p-2 rounded bg-slate-900/60 border border-red-500/30 flex gap-2">
+                            <span class="font-bold text-red-400 w-12 shrink-0">Rank 5:</span>
+                            <span class="text-slate-300">Severe. Extensive dissolution/flaking; text mostly unreadable.</span>
+                        </div>
+                        <div class="p-2 rounded bg-slate-900/60 border border-purple-500/30 flex gap-2">
+                            <span class="font-bold text-purple-400 w-12 shrink-0">Rank 6:</span>
+                            <span class="text-slate-300">Total decay. Completely illegible surface, severe crumbly loss.</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Panel: Scatter Plot & Analysis (8 cols on lg) -->
+            <div class="lg:col-span-8 space-y-6">
+
+                <!-- Chart Box -->
+                <div class="bg-slate-800/80 border border-slate-700 rounded-xl p-5 shadow-lg flex flex-col">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+                        <div>
+                            <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-chart-scatter text-indigo-400"></i> Scatter Plot & Forced Intercept ($y_0 = 1$) Trendline
+                            </h2>
+                            <p class="text-xs text-slate-400">Fixed y-intercept set to Rank 1 (Brand new stone at exposure age = 0)</p>
+                        </div>
+
+                        <!-- Chart Controls -->
+                        <div class="flex items-center gap-2 text-xs">
+                            <label class="flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1.5 rounded border border-slate-700 cursor-pointer">
+                                <input type="checkbox" id="chkShowOverallLine" checked class="rounded accent-indigo-500">
+                                <span>Overall Line</span>
+                            </label>
+                            <label class="flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1.5 rounded border border-slate-700 cursor-pointer">
+                                <input type="checkbox" id="chkShowPerTypeLines" checked class="rounded accent-indigo-500">
+                                <span>Per-Rock Lines</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Canvas Container -->
+                    <div class="relative w-full h-[400px] bg-slate-900/50 rounded-lg p-2 border border-slate-700/50">
+                        <canvas id="weatheringChart"></canvas>
+                    </div>
+
+                    <!-- Symbol Legend Bar -->
+                    <div class="mt-4 pt-3 border-t border-slate-700/60 flex flex-wrap items-center justify-center gap-4 text-xs">
+                        <div class="flex items-center gap-1.5"><span class="text-red-400 font-bold">▲</span> Granite</div>
+                        <div class="flex items-center gap-1.5"><span class="text-blue-400 font-bold">●</span> Marble</div>
+                        <div class="flex items-center gap-1.5"><span class="text-amber-400 font-bold">◆</span> Limestone</div>
+                        <div class="flex items-center gap-1.5"><span class="text-orange-400 font-bold">■</span> Sandstone</div>
+                        <div class="flex items-center gap-1.5"><span class="text-purple-400 font-bold">★</span> Slate</div>
+                        <div class="flex items-center gap-1.5"><span class="text-emerald-400 font-bold">✖</span> Quartzite</div>
+                    </div>
+                </div>
+
+                <!-- Slopes & Rates breakdown by Rock Type -->
+                <div class="bg-slate-800/80 border border-slate-700 rounded-xl p-5 shadow-lg">
+                    <h3 class="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-calculator text-indigo-400"></i> Regression Equations ($y = m \cdot x + 1$) & Durability Ranking
+                    </h3>
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900/80 text-slate-400 border-b border-slate-700">
+                                <tr>
+                                    <th class="p-2.5">Rock Type</th>
+                                    <th class="p-2.5">Count ($N$)</th>
+                                    <th class="p-2.5">Slope $m$ (Rank / Year)</th>
+                                    <th class="p-2.5">Weathering / 100 Years</th>
+                                    <th class="p-2.5">Est. Years to Rank 6</th>
+                                    <th class="p-2.5">Equation</th>
+                                </tr>
+                            </thead>
+                            <tbody id="regressionTableBody" class="divide-y divide-slate-700/50">
+                                <tr>
+                                    <td colspan="6" class="p-4 text-center text-slate-500 italic">No data loaded yet. Load sample data or record entries.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Data Table Container -->
+        <div class="bg-slate-800/80 border border-slate-700 rounded-xl p-5 shadow-lg">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+                <h3 class="text-base font-semibold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-table text-indigo-400"></i> Cemetery Field Observations Data
+                </h3>
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <div class="relative w-full sm:w-64">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+                        <input type="text" id="tableSearch" placeholder="Search gravestone or rock type..." 
+                               class="w-full bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <select id="filterRockType" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+                        <option value="ALL">All Rocks</option>
+                        <option value="Marble">Marble</option>
+                        <option value="Granite">Granite</option>
+                        <option value="Sandstone">Sandstone</option>
+                        <option value="Limestone">Limestone</option>
+                        <option value="Slate">Slate</option>
+                        <option value="Quartzite">Quartzite</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="overflow-x-auto custom-scrollbar">
+                <table class="w-full text-left text-xs text-slate-300">
+                    <thead class="bg-slate-900/90 text-slate-400 border-b border-slate-700 uppercase tracking-wider">
+                        <tr>
+                            <th class="p-3">ID / Gravestone Name</th>
+                            <th class="p-3">Rock Type</th>
+                            <th class="p-3">Year Carved</th>
+                            <th class="p-3">Exposure Age ($X$)</th>
+                            <th class="p-3">Weathering Rank ($Y$)</th>
+                            <th class="p-3">Notes</th>
+                            <th class="p-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody" class="divide-y divide-slate-700/60">
+                        <!-- Table rows generated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Custom Toast Alert Container -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <script>
+        // Default Reference Setup
+        const CURRENT_YEAR = 2026;
+
+        // Rock visual configurations: pointStyle, dataset color, border style
+        const ROCK_CONFIGS = {
+            'Granite': {
+                shape: 'triangle',
+                color: '#ef4444', // Red / Pink granite
+                bgColor: 'rgba(239, 68, 68, 0.7)',
+                borderDash: []
+            },
+            'Marble': {
+                shape: 'circle',
+                color: '#3b82f6', // Soft Blue
+                bgColor: 'rgba(59, 130, 246, 0.7)',
+                borderDash: []
+            },
+            'Limestone': {
+                shape: 'rectRot', // Diamond
+                color: '#eab308', // Tan / Yellow
+                bgColor: 'rgba(234, 179, 8, 0.7)',
+                borderDash: []
+            },
+            'Sandstone': {
+                shape: 'rect', // Square
+                color: '#f97316', // Orange / Brown
+                bgColor: 'rgba(249, 115, 22, 0.7)',
+                borderDash: []
+            },
+            'Slate': {
+                shape: 'star',
+                color: '#a855f7', // Purple / Grey
+                bgColor: 'rgba(168, 85, 247, 0.7)',
+                borderDash: []
+            },
+            'Quartzite': {
+                shape: 'crossRot', // Cross
+                color: '#10b981', // Emerald green
+                bgColor: 'rgba(16, 185, 129, 0.7)',
+                borderDash: []
+            }
+        };
+
+        // Realistic field sample data collected from a historical cemetery
+        const SAMPLE_CEMETERY_DATA = [
+            { id: 1, name: "Rev. Thomas Vance", rockType: "Sandstone", year: 1812, exposure: 2026 - 1812, rank: 5.2, notes: "Granular flaking, severe face erosion" },
+            { id: 2, name: "Eleanor Vance", rockType: "Sandstone", year: 1825, exposure: 2026 - 1825, rank: 4.8, notes: "Lettering nearly gone at base" },
+            { id: 3, name: "Captain H. Miller", rockType: "Marble", year: 1845, exposure: 2026 - 1845, rank: 4.1, notes: "Sugaring texture, rounded edges" },
+            { id: 4, name: "Sarah Miller", rockType: "Marble", year: 1852, exposure: 2026 - 1852, rank: 3.8, notes: "Moderate dissolution of thin lettering" },
+            { id: 5, name: "Child Arthur", rockType: "Marble", year: 1878, exposure: 2026 - 1878, rank: 2.9, notes: "Light lichen colonization" },
+            { id: 6, name: "John McGregor", rockType: "Limestone", year: 1860, exposure: 2026 - 1860, rank: 4.3, notes: "Pitting and chemical etching" },
+            { id: 7, name: "Margaret McGregor", rockType: "Limestone", year: 1888, exposure: 2026 - 1888, rank: 3.2, notes: "Acid rain pitting on top surface" },
+            { id: 8, name: "Col. David Ross", rockType: "Granite", year: 1890, exposure: 2026 - 1890, rank: 1.6, notes: "Pink granite, crisp carving" },
+            { id: 9, name: "Evelyn Ross", rockType: "Granite", year: 1915, exposure: 2026 - 1915, rank: 1.3, notes: "High polish remaining, pristine text" },
+            { id: 10, name: "Robert Harrison", rockType: "Slate", year: 1795, exposure: 2026 - 1795, rank: 2.8, notes: "Foliation split along edge, lettering very clear" },
+            { id: 11, name: "Abigail Harrison", rockType: "Slate", year: 1830, exposure: 2026 - 1830, rank: 2.3, notes: "Minor surface flaking" },
+            { id: 12, name: "William Davis", rockType: "Quartzite", year: 1905, exposure: 2026 - 1905, rank: 1.2, notes: "Extreme resistance, no weathering" },
+            { id: 13, name: "Clara O'Connor", rockType: "Marble", year: 1935, exposure: 2026 - 1935, rank: 2.1, notes: "Slight loss of surface sheen" },
+            { id: 14, name: "James O'Connor", rockType: "Granite", year: 1950, exposure: 2026 - 1950, rank: 1.1, notes: "Looks almost new" },
+            { id: 15, name: "Infant Grace", rockType: "Sandstone", year: 1865, exposure: 2026 - 1865, rank: 4.5, notes: "Soft brown sandstone, high spalling" },
+            { id: 16, name: "Judge S. Brooks", rockType: "Granite", year: 1980, exposure: 2026 - 1980, rank: 1.0, notes: "Zero visible degradation" }
+        ];
+
+        // Primary Data State
+        let cemeteryData = [];
+        let chartInstance = null;
+
+        /**
+         * Calculates linear slope $m$ forcing y-intercept $y_0 = 1$
+         * Equation: y = m*x + 1  ==>  (y - 1) = m*x
+         * Least squares formulation: m = sum(x * (y - 1)) / sum(x^2)
+         */
+        function calculateForcedSlope(dataPoints) {
+            if (!dataPoints || dataPoints.length === 0) return 0;
+            
+            let sumNumerator = 0;
+            let sumDenominator = 0;
+
+            dataPoints.forEach(pt => {
+                const x = pt.exposure;
+                const y = pt.rank;
+                sumNumerator += x * (y - 1);
+                sumDenominator += x * x;
+            });
+
+            if (sumDenominator === 0) return 0;
+            return sumNumerator / sumDenominator;
+        }
+
+        // Helper to format weathering rank descriptions
+        function getRankDescription(rank) {
+            if (rank <= 1.5) return "1 - Unweathered / Pristine";
+            if (rank <= 2.5) return "2 - Slightly Weathered";
+            if (rank <= 3.5) return "3 - Moderately Weathered";
+            if (rank <= 4.5) return "4 - Badly Weathered";
+            if (rank <= 5.5) return "5 - Severely Weathered";
+            return "6 - Completely Illegible";
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `pointer-events-auto flex items-center gap-2 px-4 py-3 rounded-lg text-xs font-medium text-white shadow-xl transition-all duration-300 transform translate-y-2 opacity-0 ${
+                type === 'success' ? 'bg-emerald-600 border border-emerald-500' :
+                type === 'warning' ? 'bg-amber-600 border border-amber-500' :
+                type === 'danger' ? 'bg-rose-600 border border-rose-500' :
+                'bg-indigo-600 border border-indigo-500'
+            }`;
+
+            const icon = type === 'success' ? 'fa-circle-check' :
+                         type === 'warning' ? 'fa-triangle-exclamation' :
+                         type === 'danger' ? 'fa-circle-xmark' : 'fa-circle-info';
+
+            toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${message}</span>`;
+            container.appendChild(toast);
+
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            // Auto dismiss
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('weatheringChart').getContext('2d');
+
+            chartInstance = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: 600
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: '#94a3b8',
+                                font: { family: 'Inter', size: 11 },
+                                usePointStyle: true,
+                                boxWidth: 8
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            titleColor: '#f8fafc',
+                            bodyColor: '#cbd5e1',
+                            borderColor: '#475569',
+                            borderWidth: 1,
+                            padding: 10,
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.dataset.type === 'line') {
+                                        return `${context.dataset.label}: Rank ${context.parsed.y.toFixed(2)}`;
+                                    }
+                                    const raw = context.raw;
+                                    return [
+                                        `${raw.name} (${raw.rockType})`,
+                                        `Exposure: ${raw.x} yrs (${raw.year})`,
+                                        `Weathering Rank: ${raw.y.toFixed(1)}/6`,
+                                        raw.notes ? `Note: ${raw.notes}` : ''
+                                    ].filter(Boolean);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            min: 0,
+                            title: {
+                                display: true,
+                                text: 'Exposure Time / Age of Gravestone (Years)',
+                                color: '#94a3b8',
+                                font: { family: 'Inter', size: 12, weight: '500' }
+                            },
+                            grid: {
+                                color: 'rgba(51, 65, 85, 0.4)'
+                            },
+                            ticks: {
+                                color: '#64748b'
+                            }
+                        },
+                        y: {
+                            min: 1,
+                            max: 6,
+                            ticks: {
+                                stepSize: 1,
+                                color: '#64748b'
+                            },
+                            title: {
+                                display: true,
+                                text: 'Weathering Rank (1 = Pristine, 6 = Unreadable)',
+                                color: '#94a3b8',
+                                font: { family: 'Inter', size: 12, weight: '500' }
+                            },
+                            grid: {
+                                color: 'rgba(51, 65, 85, 0.4)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart() {
+            if (!chartInstance) return;
+
+            const showOverall = document.getElementById('chkShowOverallLine').checked;
+            const showPerType = document.getElementById('chkShowPerTypeLines').checked;
+
+            const datasets = [];
+
+            // Find maximum exposure age for line endpoint
+            let maxExposure = 200;
+            if (cemeteryData.length > 0) {
+                const highest = Math.max(...cemeteryData.map(d => d.exposure));
+                maxExposure = Math.max(highest + 20, 100);
+            }
+
+            // Group observations by Rock Type
+            const rockTypesPresent = [...new Set(cemeteryData.map(d => d.rockType))];
+
+            rockTypesPresent.forEach(type => {
+                const cfg = ROCK_CONFIGS[type] || { shape: 'circle', color: '#94a3b8', bgColor: '#94a3b8' };
+                const points = cemeteryData
+                    .filter(d => d.rockType === type)
+                    .map(d => ({
+                        x: d.exposure,
+                        y: d.rank,
+                        name: d.name,
+                        rockType: d.rockType,
+                        year: d.year,
+                        notes: d.notes
+                    }));
+
+                // Scatter Dataset for each Rock Type
+                datasets.push({
+                    type: 'scatter',
+                    label: `${type} (Points)`,
+                    data: points,
+                    backgroundColor: cfg.bgColor,
+                    borderColor: cfg.color,
+                    pointStyle: cfg.shape,
+                    pointRadius: 7,
+                    pointHoverRadius: 10,
+                    pointBorderWidth: 1.5
+                });
+
+                // Per-Rock forced trendline y = m*x + 1
+                if (showPerType && points.length > 0) {
+                    const slope = calculateForcedSlope(points.map(p => ({ exposure: p.x, rank: p.y })));
+                    const endY = Math.min(6, 1 + slope * maxExposure);
+                    const endX = slope > 0 ? Math.min(maxExposure, (6 - 1) / slope) : maxExposure;
+
+                    datasets.push({
+                        type: 'line',
+                        label: `${type} Trend (m=${slope.toFixed(4)})`,
+                        data: [
+                            { x: 0, y: 1 },
+                            { x: endX, y: endY }
+                        ],
+                        borderColor: cfg.color,
+                        borderWidth: 2,
+                        borderDash: [5, 4],
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0
+                    });
+                }
+            });
+
+            // Overall Trendline (Forced Intercept at y = 1)
+            if (showOverall && cemeteryData.length > 0) {
+                const overallSlope = calculateForcedSlope(cemeteryData);
+                const endY = Math.min(6, 1 + overallSlope * maxExposure);
+                const endX = overallSlope > 0 ? Math.min(maxExposure, (6 - 1) / overallSlope) : maxExposure;
+
+                datasets.push({
+                    type: 'line',
+                    label: `Overall Fit (y = ${overallSlope.toFixed(4)}x + 1)`,
+                    data: [
+                        { x: 0, y: 1 },
+                        { x: endX, y: endY }
+                    ],
+                    borderColor: '#f59e0b', // Amber highlight
+                    borderWidth: 3,
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0
+                });
+            }
+
+            chartInstance.data.datasets = datasets;
+            chartInstance.update();
+        }
+
+        function updateDashboard() {
+            // Stats Header Counter
+            document.getElementById('statTotalStones').textContent = cemeteryData.length;
+
+            const distinctTypes = new Set(cemeteryData.map(d => d.rockType));
+            document.getElementById('statRockTypesCount').textContent = distinctTypes.size;
+
+            const overallSlope = calculateForcedSlope(cemeteryData);
+            document.getElementById('statOverallSlope').textContent = `y = 1 + ${overallSlope.toFixed(4)}x`;
+
+            const ratePerCentury = overallSlope * 100;
+            document.getElementById('statAvgRate').textContent = `+${ratePerCentury.toFixed(2)} ranks / 100 yrs`;
+
+            // Update Regression breakdown table
+            const tableBody = document.getElementById('regressionTableBody');
+            tableBody.innerHTML = '';
+
+            if (cemeteryData.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-500 italic">No field data present.</td></tr>`;
+                return;
+            }
+
+            const allRockTypes = ['Marble', 'Granite', 'Sandstone', 'Limestone', 'Slate', 'Quartzite'];
+
+            allRockTypes.forEach(rock => {
+                const rockPoints = cemeteryData.filter(d => d.rockType === rock);
+                if (rockPoints.length === 0) return;
+
+                const slope = calculateForcedSlope(rockPoints);
+                const centuryRate = slope * 100;
+                const estYearsToRank6 = slope > 0 ? Math.round((6 - 1) / slope) : '∞';
+                const cfg = ROCK_CONFIGS[rock];
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-700/30 transition-colors';
+                tr.innerHTML = `
+                    <td class="p-2.5 font-semibold text-slate-200 flex items-center gap-2">
+                        <span style="color: ${cfg.color}">●</span> ${rock}
+                    </td>
+                    <td class="p-2.5">${rockPoints.length}</td>
+                    <td class="p-2.5 font-mono text-indigo-300">${slope.toFixed(5)}</td>
+                    <td class="p-2.5 font-mono text-emerald-400">+${centuryRate.toFixed(2)}</td>
+                    <td class="p-2.5 font-mono text-amber-300">${estYearsToRank6} yrs</td>
+                    <td class="p-2.5 font-mono text-slate-400 text-[11px]">y = ${slope.toFixed(4)}x + 1</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+
+        function updateDataTable() {
+            const tbody = document.getElementById('dataTableBody');
+            tbody.innerHTML = '';
+
+            const searchVal = document.getElementById('tableSearch').value.toLowerCase();
+            const filterType = document.getElementById('filterRockType').value;
+
+            const filtered = cemeteryData.filter(item => {
+                const matchesSearch = item.name.toLowerCase().includes(searchVal) ||
+                                      item.rockType.toLowerCase().includes(searchVal) ||
+                                      (item.notes && item.notes.toLowerCase().includes(searchVal));
+                const matchesFilter = (filterType === 'ALL') || (item.rockType === filterType);
+                return matchesSearch && matchesFilter;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-500 italic">No matching gravestone observations found.</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(item => {
+                const cfg = ROCK_CONFIGS[item.rockType] || { color: '#ffffff' };
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-700/40 transition-colors border-b border-slate-700/40';
+
+                tr.innerHTML = `
+                    <td class="p-3 font-medium text-slate-100">${item.name}</td>
+                    <td class="p-3">
+                        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium" style="background-color: ${cfg.color}15; color: ${cfg.color}; border: 1px solid ${cfg.color}30;">
+                            ${item.rockType}
+                        </span>
+                    </td>
+                    <td class="p-3 text-slate-300 font-mono">${item.year || 'N/A'}</td>
+                    <td class="p-3 text-slate-300 font-mono">${item.exposure} yrs</td>
+                    <td class="p-3 font-bold font-mono text-amber-300">${Number(item.rank).toFixed(1)}</td>
+                    <td class="p-3 text-slate-400 max-w-xs truncate">${item.notes || '-'}</td>
+                    <td class="p-3 text-right">
+                        <button onclick="deleteEntry(${item.id})" class="p-1.5 text-slate-400 hover:text-rose-400 transition-colors" title="Delete Observation">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function deleteEntry(id) {
+            cemeteryData = cemeteryData.filter(d => d.id !== id);
+            updateAllView();
+            showToast('Gravestone entry removed', 'warning');
+        }
+
+        function updateAllView() {
+            updateChart();
+            updateDashboard();
+            updateDataTable();
+        }
+
+        // Master setup on page load
+        window.addEventListener('DOMContentLoaded', () => {
+
+            initChart();
+
+            // Auto calculate exposure from year carved
+            const yearInput = document.getElementById('inputYear');
+            const exposureInput = document.getElementById('inputExposure');
+            const rankInput = document.getElementById('inputRank');
+            const rankBadge = document.getElementById('rankBadge');
+
+            yearInput.addEventListener('input', () => {
+                const yr = parseInt(yearInput.value);
+                if (yr && yr > 1600 && yr <= CURRENT_YEAR) {
+                    exposureInput.value = CURRENT_YEAR - yr;
+                }
+            });
+
+            exposureInput.addEventListener('input', () => {
+                const exp = parseFloat(exposureInput.value);
+                if (exp >= 0 && exp <= 400) {
+                    yearInput.value = Math.round(CURRENT_YEAR - exp);
+                }
+            });
+
+            // Dynamic Weathering Rank Badge display
+            rankInput.addEventListener('input', () => {
+                const val = parseFloat(rankInput.value).toFixed(1);
+                rankBadge.textContent = `${val} - ${getRankDescription(val).split('-')[1].trim()}`;
+            });
+
+            // Form Submit handler
+            document.getElementById('observationForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+
+                const name = document.getElementById('inputIdentifier').value.trim();
+                const rockType = document.getElementById('selectRockType').value;
+                const year = parseInt(yearInput.value);
+                const exposure = parseFloat(exposureInput.value);
+                const rank = parseFloat(rankInput.value);
+                const notes = document.getElementById('inputNotes').value.trim();
+
+                const newEntry = {
+                    id: Date.now(),
+                    name,
+                    rockType,
+                    year,
+                    exposure,
+                    rank,
+                    notes
+                };
+
+                cemeteryData.unshift(newEntry);
+                updateAllView();
+
+                // Reset form inputs
+                document.getElementById('observationForm').reset();
+                rankInput.value = "1.0";
+                rankBadge.textContent = "1.0 - Unweathered";
+
+                showToast(`Added stone: ${name} (${rockType})`, 'success');
+            });
+
+            // Load Sample Data
+            document.getElementById('btnLoadSample').addEventListener('click', () => {
+                cemeteryData = [...SAMPLE_CEMETERY_DATA];
+                updateAllView();
+                showToast('Loaded cemetery sample dataset (16 gravestones)', 'info');
+            });
+
+            // Clear All Data
+            document.getElementById('btnClearData').addEventListener('click', () => {
+                if (cemeteryData.length === 0) return;
+                cemeteryData = [];
+                updateAllView();
+                showToast('Cleared all observation data', 'warning');
+            });
+
+            // Export CSV handler
+            document.getElementById('btnExportCSV').addEventListener('click', () => {
+                if (cemeteryData.length === 0) {
+                    showToast('No data available to export', 'warning');
+                    return;
+                }
+
+                let csvContent = "data:text/csv;charset=utf-8,ID,Gravestone,RockType,YearCarved,ExposureYears,WeatheringRank,Notes\n";
+                cemeteryData.forEach(d => {
+                    const row = [d.id, `"${d.name}"`, d.rockType, d.year, d.exposure, d.rank, `"${d.notes || ''}"`].join(",");
+                    csvContent += row + "\n";
+                });
+
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `cemetery_weathering_data_${new Date().toISOString().slice(0,10)}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                showToast('Data exported to CSV file', 'success');
+            });
+
+            // Checkbox and filter listeners
+            document.getElementById('chkShowOverallLine').addEventListener('change', updateChart);
+            document.getElementById('chkShowPerTypeLines').addEventListener('change', updateChart);
+            document.getElementById('tableSearch').addEventListener('input', updateDataTable);
+            document.getElementById('filterRockType').addEventListener('change', updateDataTable);
+
+            // Load sample data by default on start
+            document.getElementById('btnLoadSample').click();
+        });
+    </script>
+</body>
+</html>
